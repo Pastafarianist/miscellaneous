@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QAction, qApp, QApplication, QDesktopWidget, QMessageBox,
     QPushButton, QHBoxLayout, QVBoxLayout, QLineEdit, QFileDialog, QLabel, QStyle
 )
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen
+from PyQt5.QtGui import QPixmap, QPainter, QPen
 
 __version__ = '1.0'
 
@@ -20,6 +20,26 @@ cross_colors = [Qt.red, Qt.green, Qt.blue, Qt.yellow]
 
 def is_image_filename(fname):
     return os.path.splitext(fname)[1] in ('.png', '.jpg', '.jpeg', '.bmp')
+
+
+def row_to_desc(row):
+    # expected format: filename x1 y1 ... x4 y4 comment
+    # some of (xi, yi) may be empty strings, meaning that those
+    # coordinates were not selected
+    filename = row[0]
+    ticks_str = [(row[i], row[i + 1]) for i in range(1, 9, 2) if row[i]]
+    ticks = [(int(x), int(y)) for x, y in ticks_str]
+    comment = row[9]
+    return ImageDescriptor(filename, ticks, comment)
+
+
+def desc_to_row(desc):
+    flat_ticks = []
+    for tick in desc.ticks:
+        flat_ticks.append(str(tick[0]))
+        flat_ticks.append(str(tick[1]))
+    flat_ticks.extend('' for _ in range(2 * (4 - len(desc.ticks))))
+    return [desc.filename] + flat_ticks + [desc.comment]
 
 
 class ImageDescriptor(object):
@@ -41,7 +61,6 @@ class CustomQLabel(QLabel):
 
 
 class MainWindow(QMainWindow):
-    
     def __init__(self):
         super().__init__()
 
@@ -54,8 +73,7 @@ class MainWindow(QMainWindow):
 
         self.initUI()
         self.reloadDirectory()
-        
-        
+
     def initUI(self):
         centralWidget = QWidget()
         self.setCentralWidget(centralWidget)
@@ -70,7 +88,7 @@ class MainWindow(QMainWindow):
         openFolder.triggered.connect(self.showDialog)
 
         exitIcon = qApp.style().standardIcon(QStyle.SP_DialogCloseButton)
-        exitAction = QAction(exitIcon, '&Exit', self)        
+        exitAction = QAction(exitIcon, '&Exit', self)
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)
@@ -111,7 +129,7 @@ class MainWindow(QMainWindow):
         nextButton.setToolTip("PageDown")
 
         prevButton.clicked.connect(self.moveBackward)
-        nextButton.clicked.connect(self.moveForward)            
+        nextButton.clicked.connect(self.moveForward)
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.commentEdit)
@@ -121,18 +139,18 @@ class MainWindow(QMainWindow):
         vbox = QVBoxLayout()
         vbox.addWidget(self.label)
         vbox.addLayout(hbox)
-        
+
         centralWidget.setLayout(vbox)
 
         # window itself
         self.setGeometry(300, 300, 800, 480)
         self.center()
-        self.setWindowTitle('Tickster')    
+        self.setWindowTitle('Tickster')
         self.show()
 
     def about(self):
         QMessageBox.about(self, "About",
-                """<b> Tickster version %s </b> 
+                          """<b> Tickster version %s </b>
                 <p>Copyright &copy; 2015-10-07 by Dmitry Nikulin.
                 <ul>
                   <li>Python %s</li>
@@ -140,13 +158,13 @@ class MainWindow(QMainWindow):
                   <li>Qt %s</li>
                 </ul>
                 <p>Esc to exit, Ctrl+O to open a folder, PageUp/PageDown to navigate.</p>
-                <p>Data is saved automatically in <b>%s</b> when switching between images, on directory change, and on exit.</p>""" %
-                (__version__, platform.python_version(), PYQT_VERSION_STR,
-                 QT_VERSION_STR, csv_filename))
-
+                <p>Data is saved automatically in <b>%s</b> when switching between images,
+                directories, and on exit.</p>""" %
+                          (__version__, platform.python_version(), PYQT_VERSION_STR,
+                           QT_VERSION_STR, csv_filename))
 
     def eventFilter(self, source, event):
-        if (source is self.label and event.type() == QEvent.Resize):
+        if source is self.label and event.type() == QEvent.Resize:
             # re-scaling the pixmap when the label resizes
             self.setPixmap()
         return super(MainWindow, self).eventFilter(source, event)
@@ -222,15 +240,8 @@ class MainWindow(QMainWindow):
             with open(os.path.join(self.current_dir, csv_filename)) as f:
                 reader = csv.reader(f)
                 for row in reader:
-                    # expected format: filename x1 y1 ... x4 y4 comment
-                    # some of (xi, yi) may be empty strings, meaning that those
-                    # coordinates were not selected
-                    filename = row[0]
-                    ticks_str = [(row[i], row[i + 1]) for i in range(1, 9, 2) if row[i]]
-                    ticks = [(int(x), int(y)) for x, y in ticks_str]
-                    comment = row[9]
-                    desc = ImageDescriptor(filename, ticks, comment)
-                    self.descriptors[filename] = desc
+                    desc = row_to_desc(row)
+                    self.descriptors[desc.filename] = desc
 
         self.image_names = [fname for fname in contents if is_image_filename(fname)]
 
@@ -243,11 +254,11 @@ class MainWindow(QMainWindow):
     def reloadImage(self):
         image_name = self.image_names[self.current_index]
 
-        if image_name in self.descriptors:
-            self.commentEdit.setText(self.descriptors[image_name].comment)
-            # ticks are drawn elsewhere
-        else:
+        if image_name not in self.descriptors:
             self.descriptors[image_name] = ImageDescriptor(image_name, [], '')
+
+        self.commentEdit.setText(self.descriptors[image_name].comment)
+        # ticks are drawn elsewhere
 
         self.pixmap = QPixmap(os.path.join(self.current_dir, image_name))
         self.setPixmap()
@@ -281,15 +292,17 @@ class MainWindow(QMainWindow):
                 ticks.append((image_x, image_y))
 
             self.updateStatusBar()
-                
+
         event.accept()
         self.label.repaint()
 
     def updateStatusBar(self):
         if self.image_names:
             desc = self.descriptors[self.image_names[self.current_index]]
-            self.statusBar().showMessage('[%d / %d (%d)] %s | %r' % (self.current_index + 1,
-                len(self.image_names), len(self.descriptors), desc.filename, desc.ticks))
+            self.statusBar().showMessage('[%d / %d (%d)] %s | %r' % (
+                self.current_index + 1, len(self.image_names),
+                len(self.descriptors), desc.filename, desc.ticks
+            ))
 
     def drawTicks(self, qp):
         if self.image_names:
@@ -315,20 +328,9 @@ class MainWindow(QMainWindow):
                 qp.drawLine(cross_l, y, cross_r, y)
 
     def saveDescriptors(self):
-        rows = []
-        for desc in self.descriptors.values():
-            # skipping empty ones
-            if not desc.ticks and not desc.comment:
-                continue
-            flat_ticks = []
-            for tick in desc.ticks:
-                flat_ticks.append(str(tick[0]))
-                flat_ticks.append(str(tick[1]))
-            flat_ticks.extend('' for _ in range(2 * (4 - len(desc.ticks))))
-            row = [desc.filename]
-            row.extend(flat_ticks)
-            row.append(desc.comment)
-            rows.append(row)
+        # skipping empty descriptors
+        rows = [desc_to_row(desc) for desc in self.descriptors.values() if (desc.ticks or desc.comment)]
+
         if rows:
             rows.sort(key=lambda row: row[0])
             with open(os.path.join(self.current_dir, csv_filename), 'w') as f:
