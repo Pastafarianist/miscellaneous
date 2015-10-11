@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen
 
-__version__ = '1.0'
+__version__ = '1.0.1'
 
 csv_filename = 'coords.csv'
 cross_size = 20
@@ -150,8 +150,8 @@ class MainWindow(QMainWindow):
 
     def about(self):
         QMessageBox.about(self, "About",
-                          """<b> Tickster version %s </b>
-                <p>Copyright &copy; 2015-10-07 by Dmitry Nikulin.
+                """<b> Tickster version %s </b>
+                <p>Copyright &copy; by Dmitry Nikulin. October 2015.
                 <ul>
                   <li>Python %s</li>
                   <li>PyQt %s</li>
