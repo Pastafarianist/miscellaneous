@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 csv_filename = 'coords.csv'
 cross_size = 20
@@ -250,6 +250,7 @@ class MainWindow(QMainWindow):
             self.reloadImage()
         else:
             self.statusBar().showMessage('No images found in %s' % self.current_dir)
+            self.label.setText("No images found")
 
     def reloadImage(self):
         image_name = self.image_names[self.current_index]
